@@ -9,24 +9,45 @@
 #include <deque>
 #include <map>
 #include <llvm/ADT/SmallVector.h>
+#include <emmintrin.h>
+
+struct alignas(64) SpinLock {
+    std::atomic_flag flag = ATOMIC_FLAG_INIT;
+
+    void lock() {
+    	int spins = 1;
+    	while (flag.test_and_set(std::memory_order_acquire)) {
+      	  for (int i = 0; i < spins; i++)
+            _mm_pause();
+       	 if (spins < 1024)
+            spins *= 2;
+    	}
+    }
+
+    void unlock() {
+        flag.clear(std::memory_order_release);
+    }
+};
+
 
 template <typename Ty, typename FuncTy>
-struct Worker {
-    typedef void (Worker<Ty, FuncTy>::*FuncPtr)(Ty);
-    __attribute__((regcall)) void invoke(FuncTy funcType, Ty args);
+struct alignas(64) Worker {
+    __attribute__((preserve_none)) void invoke(FuncTy funcType, Ty args);
     int workerId;
-    std::thread thread;
-    std::mutex waitQueueMutex;
-    std::condition_variable cv;
-    
-    typedef struct Task{
+     typedef struct alignas(64) Task{
 	FuncTy funcType;
   	Ty args;
   	int workerId;
+  	std::atomic<int32_t> remainingInputs;
+  	
+  	char pad[64 - sizeof(funcType) - sizeof(args) - sizeof(std::atomic<int32_t>)];
     }Task;
     
-    std::unordered_map<Task*, int32_t> remainingInputs;
-    std::deque<Task*> readyQueue;
+    std::deque<Task*> readyQueue;   
+    char pad0[64 - (sizeof(int) % 64)];
+    std::thread thread;
+    SpinLock waitQueueMutex;
+    std::condition_variable cv;
     
     llvm::SmallVector<Worker<Ty, FuncTy>*> workers;
     
@@ -45,19 +66,19 @@ struct Worker {
   
   inline Task* createNewFrame(FuncTy fn, int numInputs){
 	Task* newTask = new Task(fn, Ty{}, workerId);
-	{
-		std::lock_guard<std::mutex> lk(waitQueueMutex);
-		remainingInputs[newTask] = numInputs;
-	}
+	newTask->remainingInputs.store(numInputs, std::memory_order_relaxed);
   	return newTask;
   }
 
-  void inline createNewFrameAndWriteArgs(FuncTy fn, Ty args){
-	Task* newTask = new Task(fn, args, workerId);
-	{
-		std::lock_guard<std::mutex> lk(waitQueueMutex);
-		readyQueue.push_back(newTask);
-	}
+  void inline createNewFrameAndWriteArgs(FuncTy fn, Ty args, bool launch = false){
+  	if(launch){
+  		invoke(fn, args);
+  		cv.notify_all();
+  	}else{
+		waitQueueMutex.lock();
+		readyQueue.push_back(new Task(fn, args, workerId));
+       		waitQueueMutex.unlock();
+       	}
   }
   
   /*void deleteFrame(int32_t frameId){
@@ -78,27 +99,19 @@ struct Worker {
 
   void inline writeDataToFrameImpl(Task* task, int slot, int val){
         task->args.setValue(slot, val);
-        {	
-                std::lock_guard<std::mutex> lk(waitQueueMutex);
-	   	if(remainingInputs[task]== 1){
-			readyQueue.push_back(task);
-			remainingInputs.erase(task);
- 		}else{
-	 		remainingInputs[task]--;
-	 	}
+	if(task->remainingInputs.fetch_sub(1, std::memory_order_relaxed) == 1){
+	       	waitQueueMutex.lock();
+		readyQueue.push_back(task);
+	       	waitQueueMutex.unlock();
  	}
   }
   
   void inline writeAddressToFrameImpl(Task* task, int slot, Task* val){
         task->args.setAddress(slot, val);
-        {	
-                std::lock_guard<std::mutex> lk(waitQueueMutex);
-	   	if(remainingInputs[task]== 1){
-			readyQueue.push_back(task);
-			remainingInputs.erase(task);
- 		}else{
-	 		remainingInputs[task]--;
-	 	}
+	if(task->remainingInputs.fetch_sub(1, std::memory_order_relaxed) == 1){
+	       	waitQueueMutex.lock();
+		readyQueue.push_back(task);
+	       	waitQueueMutex.unlock();
  	}
   }
   
@@ -120,18 +133,17 @@ struct Worker {
   
   inline Task* stealTask(bool local){
     Task* frameId = nullptr;
-    {
-   	std::lock_guard<std::mutex> lk(waitQueueMutex);
-    	if (!readyQueue.empty()) {
-    		if(local){
-        		frameId = readyQueue.back();
-	        	readyQueue.pop_back();
-        	}else{
-         		frameId = readyQueue.front();
-	        	readyQueue.pop_front();       		
-        	}
+    waitQueueMutex.lock();
+    if (!readyQueue.empty()) {
+    	if(local){
+       		frameId = readyQueue.back();
+	       	readyQueue.pop_back();
+        }else{
+        	frameId = readyQueue.front();
+	       	readyQueue.pop_front();       		
         }
-    }
+     }
+    waitQueueMutex.unlock();
     return frameId;
   }
   
@@ -158,7 +170,7 @@ struct Worker {
         }
 
         (invoke)(t->funcType, t->args);
-         workers[t->workerId]->cv.notify_all();
+         workers[t->workerId]->cv.notify_one();
          delete t;
      }
   }
@@ -172,7 +184,7 @@ struct Worker {
        int r = pthread_setaffinity_np(thread.native_handle(), sizeof(cpu_set_t), &cpuset);
        if (r != 0) {
          perror("pthread_setaffinity_np");
-  	}
+       }
   }
 
 };

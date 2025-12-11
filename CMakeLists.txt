@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.15)
 project(RuntimeProject CXX)
 
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_COMPILER clang++)
+set(CMAKE_CXX_COMPILER clang++-20)
 set(CMAKE_CXX_FLAGS -O3)
 
 include_directories(include)
@@ -15,9 +15,12 @@ add_executable(runtime
     main.cpp
 )
 
+target_include_directories(runtime PRIVATE ${GPERFTOOLS_INCLUDE_DIRS})
+target_link_directories(runtime PRIVATE ${GPERFTOOLS_LIBRARY_DIRS})
+
 target_link_libraries(runtime 
 	PRIVATE 
 	LLVMSupport
-	tcmalloc_minimal
+	${GPERFTOOLS_LIBRARIES}
 	)
 

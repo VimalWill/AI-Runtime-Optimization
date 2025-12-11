@@ -3,7 +3,7 @@
 #include "fib.h"
 
 int main() {
-  Runtime<FibArgs, Worker<FibArgs, FuncType>> rt(8);
+  Runtime<FibArgs, Worker<FibArgs, FuncType>> rt(4);
   rt.run();
   return 0;
 }
