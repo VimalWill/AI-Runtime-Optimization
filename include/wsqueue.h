@@ -84,7 +84,6 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
         back->next = t;
         back = t;
         t->next = nullptr;
-        
     }
   };
   TaskPool pool;
@@ -94,7 +93,7 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
   	Task* back{nullptr};
   	
   	inline bool isEmpty(){
-  		return (!back);
+  		return (!back || !front);
   	}
   	
   	inline void push_back(Task* t){
