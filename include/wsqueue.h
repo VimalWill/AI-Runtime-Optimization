@@ -11,7 +11,10 @@
 #include <map>
 #include <thread>
 #include <vector>
+#include <semaphore>
 
+std::atomic<int> global_idle_count{0};
+std::binary_semaphore sem{0};
 
 struct alignas(64) SpinLock {
   std::atomic_flag flag = ATOMIC_FLAG_INIT;
@@ -91,7 +94,7 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
   	Task* back{nullptr};
   	
   	inline bool isEmpty(){
-  		return (!back || !front);
+  		return (!back);
   	}
   	
   	inline void push_back(Task* t){
@@ -134,6 +137,7 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
   ReadyQueue readyQueue;
   std::thread thread;
   SpinLock waitQueueMutex;
+  
 
   llvm::SmallVector<Worker<Ty, FuncTy> *> workers;
 
@@ -190,6 +194,9 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
         readyQueue.push_back(newTask);
     	waitQueueMutex.unlock();
     }
+    if (global_idle_count.load(std::memory_order_release) > 0){
+	sem.release();
+    }
   }
   
   void inline createNewFrameAndWriteArgsAndLaunch(FuncTy fn, int left, Task* address, int right, int slot){
@@ -202,6 +209,9 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
       waitQueueMutex.lock();
       readyQueue.push_back(task);
       waitQueueMutex.unlock();
+      if (global_idle_count.load(std::memory_order_release) > 0){
+	sem.release();
+      }
     }
   }
 
@@ -211,6 +221,9 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
       waitQueueMutex.lock();
       readyQueue.push_back(task);
       waitQueueMutex.unlock();
+      if (global_idle_count.load(std::memory_order_release) > 0){
+	sem.release();
+      }      
     }
   }
 
@@ -279,7 +292,10 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
       }
 
       if (!valid) {
-	std::this_thread::yield();
+        if (global_idle_count.fetch_add(1, std::memory_order_release) >= 0) {
+            sem.acquire();
+        }
+        global_idle_count.fetch_sub(1, std::memory_order_release);
         continue;
       }
       invoke(t.first, t.second.left, t.second.address, t.second.right, t.second.slot);
