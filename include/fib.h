@@ -35,26 +35,27 @@ struct FibArgs{
 	}
 };
 
-template<> __attribute__((preserve_none)) void inline Worker<FibArgs, FuncType>::invoke(FuncType funcTy, FibArgs args){
-	if(funcTy == FuncType::SPAWN){
-		if(args.left >= 2){
+template<> 
+void inline __attribute__((preserve_none)) Worker<FibArgs, FuncType>::invoke(FuncType funcType, int left, Worker<FibArgs, FuncType>::Task* address, int right, int slot){
+	if(funcType == FuncType::SPAWN){
+		if(left >= 2){
 			auto syncTaskId = createNewFrame(FuncType::SYNC, 4);
-			writeAddressToFrame(syncTaskId, 1, args.address, true);
-			writeDataToFrame(syncTaskId, 3, args.slot, true);
-			createNewFrameAndWriteArgs(FuncType::SPAWN, FibArgs{args.left - 2, syncTaskId, 0, 2});
-			createNewFrameAndWriteArgs(FuncType::SPAWN, FibArgs{args.left - 1, syncTaskId, 0, 0}, true);
+			writeAddressToFrame(syncTaskId, 1, address, true);
+			writeDataToFrame(syncTaskId, 3, slot, true);
+			createNewFrameAndWriteArgs(FuncType::SPAWN, left - 2, syncTaskId, 0, 2);
+			createNewFrameAndWriteArgsAndLaunch(FuncType::SPAWN, left - 1, syncTaskId, 0, 0);
 		}
-		else if(args.address != nullptr){
-			writeDataToFrame(args.address, args.slot, args.left, false);
+		else if(address != nullptr){
+			writeDataToFrame(address, slot, left, false);
 		}
 	}else{
-		int sum = args.left + args.right;
-   		if(args.address == nullptr){
+		int sum = left + right;
+   		if(address == nullptr){
    			std::cout<<"sum:"<<sum<<"\n";
    			exit(0);
    		}
    		else{
-			writeDataToFrame(args.address, args.slot, sum, false);
+			writeDataToFrame(address, slot, sum, false);
 		}
 	}
 }
@@ -76,7 +77,7 @@ Runtime<FibArgs, Worker<FibArgs, FuncType>>::Runtime(int numThreads){
 
 template<>
 void Runtime<FibArgs, Worker<FibArgs,FuncType>>::init(){
-    ((Worker<FibArgs, FuncType>*)workers[0])->createNewFrameAndWriteArgs(FuncType::SPAWN, FibArgs{40, nullptr, 0, 0});
+    ((Worker<FibArgs, FuncType>*)workers[0])->createNewFrameAndWriteArgs(FuncType::SPAWN, 40, nullptr, 0, 0);
 }
 
 template<>

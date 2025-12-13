@@ -3,24 +3,26 @@ project(RuntimeProject CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_COMPILER clang++-20)
-set(CMAKE_CXX_FLAGS -O3)
+
+# Generate assembly + keep normal build products
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native -flto")
 
 include_directories(include)
 
 find_package(LLVM REQUIRED CONFIG)
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GPERFTOOLS REQUIRED libtcmalloc)
+#pkg_check_modules(GPERFTOOLS REQUIRED libtcmalloc)
 
 add_executable(runtime
     main.cpp
 )
 
-target_include_directories(runtime PRIVATE ${GPERFTOOLS_INCLUDE_DIRS})
-target_link_directories(runtime PRIVATE ${GPERFTOOLS_LIBRARY_DIRS})
+#target_include_directories(runtime PRIVATE ${GPERFTOOLS_INCLUDE_DIRS})
+#target_link_directories(runtime PRIVATE ${GPERFTOOLS_LIBRARY_DIRS})
 
 target_link_libraries(runtime 
-	PRIVATE 
-	LLVMSupport
-	${GPERFTOOLS_LIBRARIES}
-	)
+    PRIVATE 
+    LLVMSupport
+ #   ${GPERFTOOLS_LIBRARIES}
+)
 
