@@ -15,38 +15,24 @@ enum FuncType:bool{
 
 struct FibArgs{
 	int left;
-	Worker<FibArgs, FuncType>::Task* address;
 	int right;
 	int slot;
-	
-	void inline setValue(int index, int val){
-		switch(index){
-			case 0: left = val;
-				break;
-			case 2: right = val;
-				break;
-			case 3: slot = val;
-				break;								
-		}
-	}
-		
-	void inline setAddress(int index, Worker<FibArgs, FuncType>::Task* val){
-		address = val;
-	}
+	Worker<FibArgs, FuncType>::Task* address;
 };
 
 template<> 
-void inline __attribute__((preserve_none)) Worker<FibArgs, FuncType>::invoke(FuncType funcType, int left, Worker<FibArgs, FuncType>::Task* address, int right, int slot){
+void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncType>::invoke(FuncType funcType, int left, Worker<FibArgs, FuncType>::Task* address, int right, int slot, int addressOwner){
 	if(funcType == FuncType::SPAWN){
 		if(left >= 2){
-			auto syncTaskId = createNewFrame(FuncType::SYNC, 4);
-			writeAddressToFrame(syncTaskId, 1, address, true);
-			writeDataToFrame(syncTaskId, 3, slot, true);
+			auto syncTaskId = createNewFrameCustom(FuncType::SYNC, 2,  slot, address);
 			createNewFrameAndWriteArgs(FuncType::SPAWN, left - 2, syncTaskId, 0, 2);
 			createNewFrameAndWriteArgsAndLaunch(FuncType::SPAWN, left - 1, syncTaskId, 0, 0);
 		}
-		else if(address != nullptr){
-			writeDataToFrame(address, slot, left, false);
+		else if(address != 0){
+		    if(addressOwner == workerId)
+		    	writeDataToFrameImpl(address, slot, left);
+		    else
+		        workers[addressOwner]->writeDataToFrameImpl(address, slot, left);
 		}
 	}else{
 		int sum = left + right;
@@ -55,7 +41,11 @@ void inline __attribute__((preserve_none)) Worker<FibArgs, FuncType>::invoke(Fun
    			exit(0);
    		}
    		else{
-			writeDataToFrame(address, slot, sum, false);
+   		   if(addressOwner == workerId){
+		   	writeDataToFrameImpl(address, slot, sum);
+		   }else{
+		   	workers[addressOwner]->writeDataToFrameImpl(address, slot, sum);
+		   }
 		}
 	}
 }
@@ -68,7 +58,6 @@ Runtime<FibArgs, Worker<FibArgs, FuncType>>::Runtime(int numThreads){
 		Worker<FibArgs, FuncType>* worker = new Worker<FibArgs, FuncType>(i);
 		workers.push_back(worker);
 	}
-
 	
 	for(int i = 0; i<numThreads; i++){
 		workers[i]->setWorkers(workers);
