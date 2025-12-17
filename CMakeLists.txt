@@ -12,6 +12,7 @@ include_directories(include)
 find_package(LLVM REQUIRED CONFIG)
 find_package(PkgConfig REQUIRED)
 #pkg_check_modules(GPERFTOOLS REQUIRED libtcmalloc)
+include_directories(${LLVM_INCLUDE_DIR})
 
 add_executable(runtime
     main.cpp

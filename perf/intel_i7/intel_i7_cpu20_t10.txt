@@ -1,0 +1,31 @@
+
+ Performance counter stats for './runtime':
+
+         16,345.62 msec task-clock                       #    9.944 CPUs utilized             
+                62      context-switches                 #    3.793 /sec                      
+                12      cpu-migrations                   #    0.734 /sec                      
+               244      page-faults                      #   14.928 /sec                      
+      27,68,94,422      cpu_atom/cycles/                 #    0.017 GHz                         (0.01%)
+   43,79,03,29,206      cpu_core/cycles/                 #    2.679 GHz                         (100.00%)
+       7,82,27,375      cpu_atom/instructions/           #    0.28  insn per cycle              (0.01%)
+   29,42,64,58,813      cpu_core/instructions/           #  106.27  insn per cycle              (100.00%)
+       1,55,71,393      cpu_atom/branches/               #  952.634 K/sec                       (0.01%)
+    7,07,11,83,282      cpu_core/branches/               #  432.604 M/sec                       (100.00%)
+         18,37,794      cpu_atom/branch-misses/          #   11.80% of all branches             (0.01%)
+       1,01,01,226      cpu_core/branch-misses/          #   64.87% of all branches             (100.00%)
+             TopdownL1 (cpu_core)                 #     55.7 %  tma_backend_bound      
+                                                  #      1.7 %  tma_bad_speculation    
+                                                  #     15.2 %  tma_frontend_bound     
+                                                  #     27.4 %  tma_retiring             (100.00%)
+             TopdownL1 (cpu_atom)                 #     18.9 %  tma_bad_speculation    
+                                                  #      8.3 %  tma_retiring             (0.01%)
+                                                  #     21.6 %  tma_backend_bound      
+                                                  #     21.6 %  tma_backend_bound_aux  
+                                                  #     51.3 %  tma_frontend_bound       (0.01%)
+
+       1.643788853 seconds time elapsed
+
+      16.329710000 seconds user
+       0.018993000 seconds sys
+
+
