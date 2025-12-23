@@ -38,6 +38,7 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
   struct Task;
 
   typedef struct alignas(64) Task {
+    alignas(64) std::atomic<int32_t> remainingInputs{0};
     FuncTy funcType;
     int left;
     Task* address{nullptr};
@@ -45,7 +46,6 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
     int slot;
     Task* next;
     int addressOwner;
-    std::atomic<int32_t> remainingInputs{0};
     Task(){
     }
     
@@ -56,8 +56,6 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
 			break;
 		case 2: right = val;
 			break;
-		case 3: slot = val;
-			break;								
 	}
   }
 	
@@ -255,12 +253,13 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
 
   void inline writeDataToFrameImpl(Task *task, int slot, int val, bool enqueueLocally = false) {
     task->setValue(slot, val);
-    if (task->remainingInputs.fetch_sub(1, std::memory_order_release) == 1) {
+    if (task->remainingInputs.fetch_sub(1, std::memory_order_relaxed) == 1) {
     	bool enqueueSuccess = false;
     	if(enqueueLocally){
     		enqueueSuccess = readyQueue.local_push_back(task);
     	}
         if(!enqueueSuccess){ 	    
+		__builtin_prefetch(&readyQueue, 0 , 1);
     		waitQueueMutex.lock();
 	        readyQueue.steal_push_back(task);
         	waitQueueMutex.unlock();
@@ -270,7 +269,7 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
 
   void inline writeAddressToFrameImpl(Task *task, int slot, Task *val, bool enqueueLocally = false) {
     task->args.address = val;
-    if (task->remainingInputs.fetch_sub(1, std::memory_order_release) == 1) {
+    if (task->remainingInputs.fetch_sub(1, std::memory_order_relaxed) == 1) {
     	bool enqueueSuccess = false;
     	if(enqueueLocally){
     		enqueueSuccess = readyQueue.local_push_back(task);
@@ -363,6 +362,8 @@ inline Task* stealRemoteTask(int id) {
         }
         if(end){
 		break;        	
+	}else{
+		std::this_thread::yield();
 	}
       }
     }

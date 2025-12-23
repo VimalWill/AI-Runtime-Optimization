@@ -27,9 +27,10 @@ void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncTyp
 			auto syncTaskId = createNewFrameCustom(FuncType::SYNC, 2,  slot, address);
 			assert(syncTaskId != nullptr);
 			createNewFrameAndWriteArgs(FuncType::SPAWN, left - 2, syncTaskId, 0, 2);
-			createNewFrameAndWriteArgs(FuncType::SPAWN, left - 1, syncTaskId, 0, 0);
+			createNewFrameAndWriteArgsAndLaunch(FuncType::SPAWN, left - 1, syncTaskId, 0, 0);
 		}
 		else if(address != nullptr){
+		    __builtin_prefetch(address, 0 , 1);
 		    if(addressOwner == workerId)
 		    	writeDataToFrameImpl(address, slot, left, true);
 		    else
@@ -40,10 +41,11 @@ void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncTyp
 		int sum = left + right;
    		if(address == nullptr){
    			std::cout<<"sum:"<<sum<<"\n";
-   			exited.store(true, std::memory_order_release);
+   			exited.store(true, std::memory_order_relaxed);
    			std::atomic_thread_fence(std::memory_order_release);
    		}
    		else{
+		    __builtin_prefetch(address, 0 , 1);   		
    		   if(addressOwner == workerId){
 		   	writeDataToFrameImpl(address, slot, sum);
 		   }else{
