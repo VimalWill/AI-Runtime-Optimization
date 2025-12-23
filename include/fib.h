@@ -10,7 +10,7 @@
 
 enum FuncType:bool{
 	SPAWN = 0,
-	SYNC = 1
+	SYNC = 1,
 };
 
 struct FibArgs{
@@ -25,20 +25,23 @@ void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncTyp
 	if(funcType == FuncType::SPAWN){
 		if(left >= 2){
 			auto syncTaskId = createNewFrameCustom(FuncType::SYNC, 2,  slot, address);
+			assert(syncTaskId != nullptr);
 			createNewFrameAndWriteArgs(FuncType::SPAWN, left - 2, syncTaskId, 0, 2);
-			createNewFrameAndWriteArgsAndLaunch(FuncType::SPAWN, left - 1, syncTaskId, 0, 0);
+			createNewFrameAndWriteArgs(FuncType::SPAWN, left - 1, syncTaskId, 0, 0);
 		}
-		else if(address != 0){
+		else if(address != nullptr){
 		    if(addressOwner == workerId)
-		    	writeDataToFrameImpl(address, slot, left);
+		    	writeDataToFrameImpl(address, slot, left, true);
 		    else
-		        workers[addressOwner]->writeDataToFrameImpl(address, slot, left);
+		        workers[addressOwner]->writeDataToFrameImpl(address, slot, left, false);
 		}
-	}else{
+		return;
+	}else if(funcType == FuncType::SYNC){
 		int sum = left + right;
    		if(address == nullptr){
    			std::cout<<"sum:"<<sum<<"\n";
-   			exit(0);
+   			exited.store(true, std::memory_order_release);
+   			std::atomic_thread_fence(std::memory_order_release);
    		}
    		else{
    		   if(addressOwner == workerId){

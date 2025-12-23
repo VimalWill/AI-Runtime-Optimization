@@ -7,7 +7,6 @@ template <typename A, typename B>
 class Runtime {
 public:
     llvm::SmallVector<B*, 8> workers;
-    
     Runtime<A>(int numThreads);
     void run();
     void init();
