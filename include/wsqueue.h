@@ -8,19 +8,17 @@
 #include <functional>
 #include <iostream>
 #include <llvm/ADT/SmallVector.h>
-#include <map>
 #include <thread>
 #include <vector>
 #include <semaphore>
 
-std::atomic<int> global_idle_count{0};
-std::counting_semaphore sem{0};
+std::atomic<bool> exited[8];
 
 struct alignas(64) SpinLock {
   std::atomic_flag flag = ATOMIC_FLAG_INIT;
 
   void lock() {
-    int spins = 1;
+    int spins = 128;
     while (flag.test_and_set(std::memory_order_acquire)) {
       for (int i = 0; i < spins; i++)
         _mm_pause();
@@ -41,22 +39,17 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
     alignas(64) std::atomic<int32_t> remainingInputs{0};
     FuncTy funcType;
     int left;
-    Task* address{nullptr};
+    Task* __restrict__ address{nullptr};
     int right;
     int slot;
-    Task* next;
+    Task* __restrict__ next;
     int addressOwner;
     Task(){
     }
     
     __attribute__((preserve_none))	
    void inline setValue(int index, int val){
-	switch(index){
-		case 0: left = val;
-			break;
-		case 2: right = val;
-			break;
-	}
+	index == 0? left = val: right = val;
   }
 	
   __attribute__((preserve_none))	
@@ -65,9 +58,9 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
   }
 } Task;
 
-  struct TaskPool {
-    Task* front{nullptr};
-    Task* freePoolFront{nullptr};
+  struct  alignas(64) TaskPool {
+    Task*  __restrict__ front{nullptr};
+    Task*  __restrict__ freePoolFront{nullptr};
     int numframes{32};
     std::vector<Task*> allocatedPointers;
 
@@ -117,11 +110,15 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
   };
   TaskPool pool;
   
-  struct ReadyQueue {
+  struct  alignas(64) ReadyQueue {
 	Task* readyLocalQueue[4];
   	int m{4};
   	int localQueueBack{0};
-	std::deque<Task*> readyStealQueue;  	
+
+	Task* readyStealQueue[65536];
+	int front{0};
+	int back{0};
+	int n{65536};
 	
   	__attribute__((hot))
   	bool local_push_back(Task* t){
@@ -141,26 +138,27 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
   	
   	__attribute__((hot))
   	void steal_push_back(Task* t){
-		readyStealQueue.push_back(t);
+		if(back - front == n){
+			std::cout<<"queue full\n";
+			exit(0);
+		}
+		readyStealQueue[back++%n] = t;
   	}
   	
   	__attribute__((cold))  	
   	Task* steal_pop_front(){
-  		if(readyStealQueue.empty()){
-  			return nullptr;  
+  		if(back == front){
+			return nullptr;
   		}	
-		auto t = readyStealQueue.front();
-		readyStealQueue.pop_front();
-		return t;
+		return readyStealQueue[front++%n];
   	}  	
   	
   	__attribute__((cold))  	
   	Task* steal_pop_back(){
-  		if(readyStealQueue.empty())
-  			return nullptr;  	
-		auto t = readyStealQueue.back();
-		readyStealQueue.pop_back();
-		return t;
+  		if(back == front){
+			return nullptr;
+  		}
+		return readyStealQueue[--back%n];
   	}
   };
   
@@ -169,12 +167,10 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
   ReadyQueue readyQueue;
   std::thread thread;
   SpinLock waitQueueMutex;
-  std::atomic<bool> exited{false};
-  
 
   llvm::SmallVector<Worker<Ty, FuncTy> *, 8> workers;
 
-  Worker<Ty, FuncTy>(int workerId) { this->workerId = workerId; exited.store(false); }
+  Worker<Ty, FuncTy>(int workerId) { this->workerId = workerId; exited[workerId].store(false, std::memory_order_relaxed); }
 
   void inline setWorkers(llvm::SmallVector<Worker<Ty, FuncTy> *, 8> &workers) {
     this->workers = workers;
@@ -214,6 +210,7 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
     return newTask;
   }
 
+__attribute__((always_inline))
   void inline createNewFrameAndWriteArgs(FuncTy fn, int left, Task* address, int right, int slot) {
     Task* newTask = nullptr;
     if(!pool.isEmpty()){
@@ -247,19 +244,21 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
     assert(newTask != nullptr);
   }
   
+__attribute__((always_inline))  
   void inline createNewFrameAndWriteArgsAndLaunch(FuncTy fn, int left, Task* address, int right, int slot){
   	invoke(fn, left, address, right, slot, address->addressOwner);
   }
 
+__attribute__((always_inline))
   void inline writeDataToFrameImpl(Task *task, int slot, int val, bool enqueueLocally = false) {
     task->setValue(slot, val);
     if (task->remainingInputs.fetch_sub(1, std::memory_order_relaxed) == 1) {
+	__builtin_prefetch(&readyQueue, 1, 3);    
     	bool enqueueSuccess = false;
     	if(enqueueLocally){
     		enqueueSuccess = readyQueue.local_push_back(task);
     	}
         if(!enqueueSuccess){ 	    
-		__builtin_prefetch(&readyQueue, 0 , 1);
     		waitQueueMutex.lock();
 	        readyQueue.steal_push_back(task);
         	waitQueueMutex.unlock();
@@ -270,6 +269,7 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
   void inline writeAddressToFrameImpl(Task *task, int slot, Task *val, bool enqueueLocally = false) {
     task->args.address = val;
     if (task->remainingInputs.fetch_sub(1, std::memory_order_relaxed) == 1) {
+	__builtin_prefetch(&readyQueue, 1, 3);
     	bool enqueueSuccess = false;
     	if(enqueueLocally){
     		enqueueSuccess = readyQueue.local_push_back(task);
@@ -319,6 +319,8 @@ inline Task* stealRemoteTask(int id) {
   __attribute__((hot, flatten)) void workerLoop() {
     while (true) {
       bool valid = false;
+      __builtin_prefetch(readyQueue.readyLocalQueue, 1, 3);
+      __builtin_prefetch(&pool, 1, 3);      
       // try to pop from my readyQueue first
       Task* t = executeLocalTask();
       if(t){
@@ -336,6 +338,8 @@ inline Task* stealRemoteTask(int id) {
        for (int i = 0; i < workers.size(); i++) {
           if(i == workerId)
           	continue;
+      __builtin_prefetch(&workers[i]->waitQueueMutex, 1, 3);          	
+      __builtin_prefetch(&workers[i]->readyQueue.readyStealQueue, 1, 3);          	
           t = stealRemoteTask(i);
 	  if(t) {
 	  	break;
@@ -354,16 +358,15 @@ inline Task* stealRemoteTask(int id) {
         	invoke(fn, left, address, right, slot, addressOwner);
         	continue;
         }else{
-       	        for (int i = 0; i < workers.size(); i++) {
-			end = workers[i]->exited.load(std::memory_order_acq_rel);
+		std::this_thread::yield();
+		for(int i = 0; i<workers.size(); i++){
+			end = exited[i].load(std::memory_order_relaxed);
 			if(end)
-				break;			
+				break;
        	        }
         }
         if(end){
 		break;        	
-	}else{
-		std::this_thread::yield();
 	}
       }
     }
