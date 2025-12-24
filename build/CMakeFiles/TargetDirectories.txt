@@ -1,0 +1,6 @@
+/home/vimal/Edge_ai/AI-Runtime-Optimization/build/CMakeFiles/intrinsics_gen.dir
+/home/vimal/Edge_ai/AI-Runtime-Optimization/build/CMakeFiles/omp_gen.dir
+/home/vimal/Edge_ai/AI-Runtime-Optimization/build/CMakeFiles/acc_gen.dir
+/home/vimal/Edge_ai/AI-Runtime-Optimization/build/CMakeFiles/runtime.dir
+/home/vimal/Edge_ai/AI-Runtime-Optimization/build/CMakeFiles/edit_cache.dir
+/home/vimal/Edge_ai/AI-Runtime-Optimization/build/CMakeFiles/rebuild_cache.dir
