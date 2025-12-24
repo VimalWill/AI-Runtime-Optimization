@@ -1,1 +1,0 @@
-clang++-20  -O3 -fvectorize -march=native -flto -O3 -march=native -mtune=native -fno-exceptions -fno-rtti CMakeFiles/runtime.dir/main.cpp.o -o runtime  /usr/lib/llvm-14/lib/libLLVMSupport.a -lrt -ldl -lm /usr/lib/x86_64-linux-gnu/libz.so /usr/lib/x86_64-linux-gnu/libtinfo.so /usr/lib/llvm-14/lib/libLLVMDemangle.a 
