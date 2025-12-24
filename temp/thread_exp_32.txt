@@ -1,0 +1,43 @@
+pthread_setaffinity_np: Success
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+
+ Performance counter stats for '/home/vimal/Edge_ai/AI-Runtime-Optimization/build/runtime 32':
+
+          8,685.26 msec task-clock                       #   19.396 CPUs utilized             
+             3,484      context-switches                 #  401.139 /sec                      
+                65      cpu-migrations                   #    7.484 /sec                      
+            15,113      page-faults                      #    1.740 K/sec                     
+    10,497,719,867      cpu_atom/cycles/                 #    1.209 GHz                         (79.08%)
+    17,359,976,551      cpu_core/cycles/                 #    1.999 GHz                         (91.89%)
+    13,915,720,395      cpu_atom/instructions/           #    1.33  insn per cycle              (79.08%)
+    14,402,356,070      cpu_core/instructions/           #    1.37  insn per cycle              (91.89%)
+     2,519,173,067      cpu_atom/branches/               #  290.052 M/sec                       (79.08%)
+     2,606,716,748      cpu_core/branches/               #  300.131 M/sec                       (91.89%)
+         9,980,257      cpu_atom/branch-misses/          #    0.40% of all branches             (79.08%)
+         5,725,789      cpu_core/branch-misses/          #    0.23% of all branches             (91.89%)
+             TopdownL1 (cpu_core)                 #     53.7 %  tma_backend_bound      
+                                                  #      3.2 %  tma_bad_speculation    
+                                                  #     11.1 %  tma_frontend_bound     
+                                                  #     32.0 %  tma_retiring             (91.89%)
+             TopdownL1 (cpu_atom)                 #      5.2 %  tma_bad_speculation    
+                                                  #     29.4 %  tma_retiring             (79.08%)
+                                                  #     57.8 %  tma_backend_bound      
+                                                  #     57.8 %  tma_backend_bound_aux  
+                                                  #      7.6 %  tma_frontend_bound       (79.08%)
+
+       0.447795981 seconds time elapsed
+
+       8.628742000 seconds user
+       0.057931000 seconds sys
+
+
