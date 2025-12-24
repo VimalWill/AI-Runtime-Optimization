@@ -1,0 +1,75 @@
+pthread_setaffinity_np: Success
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+pthread_setaffinity_np: Invalid argument
+
+ Performance counter stats for '/home/vimal/Edge_ai/AI-Runtime-Optimization/build/runtime 64':
+
+         13,496.99 msec task-clock                       #   18.647 CPUs utilized             
+             5,543      context-switches                 #  410.684 /sec                      
+               127      cpu-migrations                   #    9.410 /sec                      
+            24,518      page-faults                      #    1.817 K/sec                     
+    15,065,965,708      cpu_atom/cycles/                 #    1.116 GHz                         (82.57%)
+    25,011,139,583      cpu_core/cycles/                 #    1.853 GHz                         (96.33%)
+    13,809,462,910      cpu_atom/instructions/           #    0.92  insn per cycle              (82.57%)
+    13,662,449,493      cpu_core/instructions/           #    0.91  insn per cycle              (96.33%)
+     2,488,634,147      cpu_atom/branches/               #  184.384 M/sec                       (82.57%)
+     2,463,926,869      cpu_core/branches/               #  182.554 M/sec                       (96.33%)
+        10,083,813      cpu_atom/branch-misses/          #    0.41% of all branches             (82.57%)
+         5,567,003      cpu_core/branch-misses/          #    0.22% of all branches             (96.33%)
+             TopdownL1 (cpu_core)                 #     67.3 %  tma_backend_bound      
+                                                  #      2.3 %  tma_bad_speculation    
+                                                  #      8.9 %  tma_frontend_bound     
+                                                  #     21.5 %  tma_retiring             (96.33%)
+             TopdownL1 (cpu_atom)                 #      3.7 %  tma_bad_speculation    
+                                                  #     23.4 %  tma_retiring             (82.57%)
+                                                  #     57.9 %  tma_backend_bound      
+                                                  #     57.9 %  tma_backend_bound_aux  
+                                                  #     14.9 %  tma_frontend_bound       (82.57%)
+
+       0.723804244 seconds time elapsed
+
+      13.179179000 seconds user
+       0.321565000 seconds sys
+
+

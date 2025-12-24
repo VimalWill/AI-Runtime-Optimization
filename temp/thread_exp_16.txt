@@ -1,0 +1,31 @@
+
+ Performance counter stats for '/home/vimal/Edge_ai/AI-Runtime-Optimization/build/runtime 16':
+
+          8,130.32 msec task-clock                       #   15.628 CPUs utilized             
+               858      context-switches                 #  105.531 /sec                      
+                28      cpu-migrations                   #    3.444 /sec                      
+             9,511      page-faults                      #    1.170 K/sec                     
+     6,264,016,827      cpu_atom/cycles/                 #    0.770 GHz                         (79.75%)
+    18,944,430,447      cpu_core/cycles/                 #    2.330 GHz                         (99.92%)
+     8,877,081,688      cpu_atom/instructions/           #    1.42  insn per cycle              (79.75%)
+    17,047,453,492      cpu_core/instructions/           #    2.72  insn per cycle              (99.92%)
+     1,607,860,272      cpu_atom/branches/               #  197.761 M/sec                       (79.75%)
+     3,087,367,797      cpu_core/branches/               #  379.735 M/sec                       (99.92%)
+         6,096,701      cpu_atom/branch-misses/          #    0.38% of all branches             (79.75%)
+         6,541,639      cpu_core/branch-misses/          #    0.41% of all branches             (99.92%)
+             TopdownL1 (cpu_core)                 #     50.3 %  tma_backend_bound      
+                                                  #      3.3 %  tma_bad_speculation    
+                                                  #     11.7 %  tma_frontend_bound     
+                                                  #     34.7 %  tma_retiring             (99.92%)
+             TopdownL1 (cpu_atom)                 #      5.3 %  tma_bad_speculation    
+                                                  #     30.7 %  tma_retiring             (79.75%)
+                                                  #     58.7 %  tma_backend_bound      
+                                                  #     58.7 %  tma_backend_bound_aux  
+                                                  #      5.3 %  tma_frontend_bound       (79.75%)
+
+       0.520226084 seconds time elapsed
+
+       8.024374000 seconds user
+       0.107964000 seconds sys
+
+
