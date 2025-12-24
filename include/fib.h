@@ -21,40 +21,41 @@ struct FibArgs{
 };
 
 template<> 
-void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncType>::invoke(FuncType funcType, int left, Worker<FibArgs, FuncType>::Task* address, int right, int slot, int addressOwner){
-	if(funcType == FuncType::SPAWN){
+void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncType>::spawn(int left, Worker<FibArgs, FuncType>::Task* address, int slot, int addressOwner){
 		if(left >= 2){
-			auto syncTaskId = createNewFrameCustom(FuncType::SYNC, 2,  slot, address);
-			assert(syncTaskId != nullptr);
-			createNewFrameAndWriteArgs(FuncType::SPAWN, left - 2, syncTaskId, 0, 2);
-			createNewFrameAndWriteArgsAndLaunch(FuncType::SPAWN, left - 1, syncTaskId, 0, 0);
+			//createFibChildrenAndLaunch(slot, address, left);
+			auto syncTaskId = createNewSyncFrameCustom(slot, address);
+			createNewSpawnFrameAndWriteArgs(left - 2, syncTaskId, 1);
+			createNewSpawnFrameAndWriteArgsAndLaunch(left - 1, syncTaskId, 0);
 		}
 		else if(address){
-		    __builtin_prefetch(address, 1, 3);
-		    __builtin_prefetch(&address->remainingInputs, 1, 3);		    
+  		    _mm_prefetch(&address->args, _MM_HINT_T0);		    		    		    		    
+		    __builtin_prefetch(&address->remainingInputs, 1, 3);
 		    if(addressOwner == workerId)
 		    	writeDataToFrameImpl(address, slot, left, true);
 		    else
 		        workers[addressOwner]->writeDataToFrameImpl(address, slot, left, false);
 		}
 		return;
-	}else if(funcType == FuncType::SYNC){
+}
+
+template<> 
+void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncType>::sync(int left, Worker<FibArgs, FuncType>::Task* address, int right, int slot, int addressOwner){
 		int sum = left + right;
-   		if(!address){
+		if(address){
+  		    _mm_prefetch(&address->remainingInputs, _MM_HINT_T0);		    		    		    		    		
+   		   if(addressOwner == workerId){
+		   	writeDataToFrameImpl(address, slot, sum, true);
+		   }else{
+		   	workers[addressOwner]->writeDataToFrameImpl(address, slot, sum, false);
+		   }
+		}
+   		else{
    			std::cout<<"sum:"<<sum<<"\n";
    			exited[workerId].store(true, std::memory_order_relaxed);
    			std::atomic_thread_fence(std::memory_order_release);
    		}
-   		else{
-		    __builtin_prefetch(address, 0 , 1);
-		    __builtin_prefetch(&address->remainingInputs, 1, 3);		    		       		
-   		   if(addressOwner == workerId){
-		   	writeDataToFrameImpl(address, slot, sum);
-		   }else{
-		   	workers[addressOwner]->writeDataToFrameImpl(address, slot, sum);
-		   }
-		}
-	}
+   		return;
 }
 
 template class Runtime<FibArgs, Worker<FibArgs, FuncType> >;
@@ -73,7 +74,7 @@ Runtime<FibArgs, Worker<FibArgs, FuncType>>::Runtime(int numThreads){
 
 template<>
 void Runtime<FibArgs, Worker<FibArgs,FuncType>>::init(){
-    ((Worker<FibArgs, FuncType>*)workers[0])->createNewFrameAndWriteArgs(FuncType::SPAWN, 40, nullptr, 0, 0);
+    ((Worker<FibArgs, FuncType>*)workers[0])->createNewSpawnFrameAndWriteArgs(42, nullptr, 0);
 }
 
 template<>
