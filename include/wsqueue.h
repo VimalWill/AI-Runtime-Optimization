@@ -11,9 +11,10 @@
 #include <thread>
 #include <vector>
 #include <semaphore>
-#define numframes 2048
+#include <queue>
+#define numframes 32
 #define m 4
-#define n 65536
+#define n 65536*64
 
 std::atomic<bool> exited[8];
 
@@ -46,6 +47,8 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
     Task* __restrict__ address{nullptr};        
     int slot;
     int addressOwner;
+    bool lastProducer{false};
+    bool expectLastProducer{false};    
     __attribute__((preserve_none))	
    void inline setValue(int index, int val){
 	args[index] = val;
@@ -60,7 +63,7 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
   struct  alignas(64) TaskPool {
     Task* front[numframes];
     int frontIndex{numframes};
-    Task* freePoolFront[65536*16];
+    Task* freePoolFront[65536*64];
     int freePoolIndex{0};
     std::vector<Task*> allocatedPointers;
 
@@ -74,7 +77,29 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
 		frontIndex = 1;
         	return t;
     }
+   
+       __attribute__((cold))
+    inline std::pair<Task*, Task*> allocateTwoFrames() {
+        	Task *tasks = new Task[numframes];
+        	allocatedPointers.push_back(tasks);
+        	for(int i = 0; i<numframes;i++)
+        		front[i] = &tasks[i];
+		frontIndex = 2;
+        	return std::make_pair(&tasks[0], &tasks[1]);
+    }
     
+    __attribute__((hot))    
+    inline std::pair<Task*, Task*> getTwoFrames(){
+	if(frontIndex == numframes && freePoolIndex < 2){
+		return allocateTwoFrames();
+	}
+        else if(frontIndex < numframes - 1){
+        	auto  t = std::make_pair(front[frontIndex], front[frontIndex+1]);
+        	frontIndex = frontIndex + 2;
+        	return t;
+        }
+        return std::make_pair(nullptr, nullptr);
+    }
     
 	
     __attribute__((hot))    
@@ -91,7 +116,7 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
     }
     
     inline void free(Task* t, bool enqueOnBack = false){
-        if(freePoolIndex == 65536*16){
+        if(freePoolIndex == 65536*64){
         	std::cout<<"free pool full, cant free\n";
         	exit(1);
         }
@@ -161,7 +186,7 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
   	}
   };
   
-  void __attribute__((preserve_none)) spawn(int, Task *, int, int);
+  void __attribute__((preserve_none)) spawn(int, Task *, int, int, bool);
   void __attribute__((preserve_none)) sync(int, Task *, int, int, int);
 
   ReadyQueue readyQueue;
@@ -181,41 +206,68 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
       thread.join();
   }
 
-  inline Task *createNewFrame(FuncTy fn, int numInputs) {
+ /* inline Task *createNewFrame(FuncTy fn, int numInputs) {
     __builtin_prefetch(pool.front, 1, 3);  
     Task* newTask = pool.getFrame();
     newTask->funcType = fn;
     newTask->addressOwner = workerId;
     newTask->remainingInputs.store(numInputs, std::memory_order_relaxed);
+    newTask->expectLastProducer = false;
+    newTask->lastProducer = false;    
     return newTask;
   }
+  */
   
-  inline Task* createNewSyncFrameCustom(int val, Task* addr) {
-    Task* newTask = pool.getFrame();
+  inline Task* createNewSyncFrameCustom(int val, Task* addr, int left) {
+    //auto tasks = pool.getTwoFrames();
+    Task* newTask = nullptr;
+    Task* leftTask = nullptr;
+    //if(tasks.first){
+    //	newTask = tasks.first;
+    //	leftTask = tasks.second;
+    //}else{
+    	newTask = pool.getFrame();
+    	leftTask = pool.getFrame();
+    //}
     __builtin_prefetch(&newTask->remainingInputs, 1, 3);  
     newTask->funcType = FuncTy::SYNC;
-    newTask->slot = val;  
+    newTask->slot = val;
     newTask->address = addr;
     newTask->addressOwner = workerId;
-    newTask->remainingInputs.store(2, std::memory_order_relaxed);
+    leftTask->funcType = FuncTy::SPAWN;
+    leftTask->args[0] = left;
+    leftTask->address = newTask;
+    leftTask->slot = 1;
+    leftTask->addressOwner = workerId;
+    //newTask->expectLastProducer = false;
+    //leftTask->lastProducer = false;         
+    if(readyQueue.isLocalQueueFull()){ 	   
+	newTask->remainingInputs.store(2, std::memory_order_relaxed);
+	newTask->expectLastProducer = false;
+    	leftTask->lastProducer = false;
+    	waitQueueMutex.lock();
+	readyQueue.steal_push_back(leftTask);
+        waitQueueMutex.unlock();
+    }else{
+    	if(left < 1){
+    		newTask->expectLastProducer = true;
+    		leftTask->lastProducer = true;
+    	}else{
+    		newTask->remainingInputs.store(2, std::memory_order_relaxed);
+		newTask->expectLastProducer = false;
+    		leftTask->lastProducer = false;
+	}   
+    	readyQueue.local_push_back(leftTask);
+    } 
     return newTask;
   }
 
-  void inline enqueueTask(Task * t){
-      if(readyQueue.isLocalQueueFull()){ 	    
-    	waitQueueMutex.lock();
-	readyQueue.steal_push_back(t);
-        waitQueueMutex.unlock();
-    }else{
-    	readyQueue.local_push_back(t);
-    }  
-  }
 __attribute__((always_inline))
-  void inline createNewSpawnFrameAndWriteArgs(int left, Task* address, int slot) {
+  void inline createNewSpawnFrameAndWriteArgs(int left, int slot) {
     Task* newTask = pool.getFrame();
     newTask->funcType = FuncTy::SPAWN;
     newTask->args[0] = left;
-    newTask->address = address;
+    newTask->address = nullptr;
     newTask->slot = slot;
     newTask->addressOwner = workerId;
     if(readyQueue.isLocalQueueFull()){ 	    
@@ -225,17 +277,33 @@ __attribute__((always_inline))
     }else{
     	readyQueue.local_push_back(newTask);
     }  	
-    assert(newTask != nullptr);
   }
   
 __attribute__((always_inline))  
   void inline createNewSpawnFrameAndWriteArgsAndLaunch(int left, Task* address, int slot){
-  	spawn(left, address, slot, address->addressOwner);
+  	spawn(left, address, slot, address->addressOwner, false);
   }
 
 __attribute__((always_inline))
-  void inline writeDataToFrameImpl(Task *task, int slot, int val, bool enqueueLocally) {
+  void inline writeDataToFrameImpl(Task *task, int slot, int val, bool enqueueLocally, bool lastProducer) {
     task->setValue(slot, val);
+    if(task->expectLastProducer){
+	if(!lastProducer){
+		return;
+	}
+    	else {
+      	 _mm_prefetch(&readyQueue, _MM_HINT_T0);		    		    		    		    		
+    	 if(enqueueLocally && !readyQueue.isLocalQueueFull()){
+		readyQueue.local_push_back(task);
+    		return;
+    	}
+    	waitQueueMutex.lock();
+	readyQueue.steal_push_back(task);
+        waitQueueMutex.unlock();
+        return;
+    }
+    }
+    else 
     if (task->remainingInputs.fetch_sub(1, std::memory_order_relaxed) == 1) {
   	_mm_prefetch(&readyQueue, _MM_HINT_T0);		    		    		    		    		
     	if(enqueueLocally && !readyQueue.isLocalQueueFull()){
@@ -250,7 +318,7 @@ __attribute__((always_inline))
   }
 
   void inline writeAddressToFrameImpl(Task *task, int slot, Task *val, bool enqueueLocally) {
-    task->args.address = val;
+    task->address = val;
     if (task->remainingInputs.fetch_sub(1, std::memory_order_relaxed) == 1) {
   	_mm_prefetch(&readyQueue, _MM_HINT_T0);		    		    		    		    		
     	if(enqueueLocally && !readyQueue.isLocalQueueFull()){
@@ -282,8 +350,10 @@ __attribute__((always_inline))
   */
   
 inline Task* executeLocalTask() {
-   if(!readyQueue.isLocalQueueEmpty())
-   	return readyQueue.local_pop_back();
+   if(!readyQueue.isLocalQueueEmpty()){
+   	auto task = readyQueue.local_pop_back();
+   	return task;
+   }
    waitQueueMutex.lock();   
    Task *t = readyQueue.steal_pop_back();
    waitQueueMutex.unlock();  
@@ -308,9 +378,10 @@ inline Task* stealRemoteTask(int id) {
              Task* address = t->address;
              int slot = t->slot;
              int addressOwner = t->addressOwner;
+             bool lastProducer = t->lastProducer;
 	     pool.free(t);
 	     if(fn == FuncTy::SPAWN){
-             	spawn(left, address, slot, addressOwner);
+             	spawn(left, address, slot, addressOwner, lastProducer);
              }else{
              	sync(left, address, right, slot, addressOwner);            
              }
@@ -335,10 +406,11 @@ inline Task* stealRemoteTask(int id) {
        	     	int right = t->args[1];
         	Task* address = t->address;
         	int slot = t->slot;
+	        bool lastProducer = t->lastProducer;        	
         	int addressOwner = t->addressOwner;
 	        pool.free(t);
 	     	if(fn == FuncTy::SPAWN){
-             		spawn(left, address, slot, addressOwner);
+             		spawn(left, address, slot, addressOwner, lastProducer);
              	}else{
              		sync(left, address, right, slot, addressOwner);            
            	}
@@ -349,6 +421,8 @@ inline Task* stealRemoteTask(int id) {
 				if(end)
 					break;
        	        }
+       	        if(!end)
+       	        	std::this_thread::yield();
         }
         if(end){
 		break;        	

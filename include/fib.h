@@ -21,20 +21,20 @@ struct FibArgs{
 };
 
 template<> 
-void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncType>::spawn(int left, Worker<FibArgs, FuncType>::Task* address, int slot, int addressOwner){
+void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncType>::spawn(int left, Worker<FibArgs, FuncType>::Task* address, int slot, int addressOwner, bool lastProducer){
 		if(left >= 2){
 			//createFibChildrenAndLaunch(slot, address, left);
-			auto syncTaskId = createNewSyncFrameCustom(slot, address);
-			createNewSpawnFrameAndWriteArgs(left - 2, syncTaskId, 1);
+			auto syncTaskId = createNewSyncFrameCustom(slot, address, left - 2);
+	    	        assert(syncTaskId->funcType == FuncType::SYNC);
 			createNewSpawnFrameAndWriteArgsAndLaunch(left - 1, syncTaskId, 0);
 		}
 		else if(address){
   		    _mm_prefetch(&address->args, _MM_HINT_T0);		    		    		    		    
 		    __builtin_prefetch(&address->remainingInputs, 1, 3);
 		    if(addressOwner == workerId)
-		    	writeDataToFrameImpl(address, slot, left, true);
+		    	writeDataToFrameImpl(address, slot, left, true, lastProducer);
 		    else
-		        workers[addressOwner]->writeDataToFrameImpl(address, slot, left, false);
+		        workers[addressOwner]->writeDataToFrameImpl(address, slot, left, false, false);
 		}
 		return;
 }
@@ -43,11 +43,10 @@ template<>
 void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncType>::sync(int left, Worker<FibArgs, FuncType>::Task* address, int right, int slot, int addressOwner){
 		int sum = left + right;
 		if(address){
-  		    _mm_prefetch(&address->remainingInputs, _MM_HINT_T0);		    		    		    		    		
    		   if(addressOwner == workerId){
-		   	writeDataToFrameImpl(address, slot, sum, true);
+		   	writeDataToFrameImpl(address, slot, sum, true, false);
 		   }else{
-		   	workers[addressOwner]->writeDataToFrameImpl(address, slot, sum, false);
+		   	workers[addressOwner]->writeDataToFrameImpl(address, slot, sum, false, false);
 		   }
 		}
    		else{
@@ -74,7 +73,7 @@ Runtime<FibArgs, Worker<FibArgs, FuncType>>::Runtime(int numThreads){
 
 template<>
 void Runtime<FibArgs, Worker<FibArgs,FuncType>>::init(){
-    ((Worker<FibArgs, FuncType>*)workers[0])->createNewSpawnFrameAndWriteArgs(42, nullptr, 0);
+    ((Worker<FibArgs, FuncType>*)workers[0])->createNewSpawnFrameAndWriteArgs(40, 0);
 }
 
 template<>
