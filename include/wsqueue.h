@@ -16,7 +16,7 @@
 #define m 4
 #define n 65536*64
 
-std::atomic<bool> exited[8];
+std::atomic<bool> exited{false};
 
 struct alignas(64) SpinLock {
   std::atomic_flag flag = ATOMIC_FLAG_INIT;
@@ -41,13 +41,13 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
 
   typedef struct alignas(64) Task {
     alignas(64) std::atomic<int32_t> remainingInputs{0};
+    bool lastProducer{false};
+    bool expectLastProducer{false};   
     int args[2];    
     FuncTy funcType;
     Task* __restrict__ address{nullptr};        
     int slot;
     int addressOwner;
-    bool lastProducer{false};
-    bool expectLastProducer{false};    
     __attribute__((preserve_none))	
    void inline setValue(int index, int val){
 	args[index] = val;
@@ -199,7 +199,7 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
 
   llvm::SmallVector<Worker<Ty, FuncTy> *, 8> workers;
 
-  Worker<Ty, FuncTy>(int workerId) { this->workerId = workerId; exited[workerId].store(false, std::memory_order_relaxed); }
+  Worker<Ty, FuncTy>(int workerId) { this->workerId = workerId; }
 
   void inline setWorkers(llvm::SmallVector<Worker<Ty, FuncTy> *, 8> &workers) {
     this->workers = workers;
@@ -234,7 +234,7 @@ template <typename Ty, typename FuncTy> struct alignas(64) Worker {
     	leftTask = pool.getFrame();
     }
     __builtin_prefetch(&newTask->remainingInputs, 1, 3);
-    newTask->funcType = addr?FuncTy::SYNC:FuncTy::END;
+    newTask->funcType = FuncTy::SYNC;
     newTask->slot = val;
     newTask->address = addr;
     newTask->addressOwner = workerId;
@@ -398,11 +398,12 @@ inline Task* stealRemoteTask(int id) {
 	     pool.free(t);
 	     if(fn == FuncTy::SPAWN){
              	spawn(left, address, slot, addressOwner, lastProducer);
-             }else if(fn == FuncTy::SYNC){
+             }else {
              	sync(left, address, right, slot, addressOwner);            
-             }else{
-             	exitTask(left, right);
              }
+             //else{
+             //	exitTask(left, right);
+             //}
              continue;
       }
       else{
@@ -417,15 +418,10 @@ inline Task* stealRemoteTask(int id) {
 	  }
         }
        }
-       	bool end = false;
         if(!tasks.empty()){
            	Task * t = tasks[0];
            	waitQueueMutex.lock();
-           	int i = 1;
-        	for(i = 1; i<tasks.size(); i++){
-	        	readyQueue.local_push_back(tasks[i]);
-           	}
-           	for(; i<tasks.size(); i++){
+           	for(int i = 1; i<tasks.size(); i++){
 			readyQueue.steal_push_back(tasks[i]);
            	}
            	waitQueueMutex.unlock();
@@ -439,24 +435,18 @@ inline Task* stealRemoteTask(int id) {
 		pool.free(t);
 		if(fn == FuncTy::SPAWN){
         		spawn(left, address, slot, addressOwner, lastProducer);
-             	}else if(fn == FuncTy::SYNC){
+             	}else {
              		sync(left, address, right, slot, addressOwner);            
-             	}else{
-             		exitTask(left, right);
              	}
+             	//else{
+             	//	exitTask(left, right);
+             	//}
         	continue;
-        }else{
-		for(int i = 0; i<workers.size(); i++){
-				end = exited[i].load(std::memory_order_relaxed);
-				if(end)
-					break;
-       	        }
-       	        if(!end)
-       	        	std::this_thread::yield();
         }
-        if(end){
-		break;        	
-	}
+        if(exited.load(std::memory_order_relaxed)){
+		break;
+        }
+    	std::this_thread::yield();
       }
     }
 

@@ -8,10 +8,9 @@
 #include <iostream>
 #include "runtime.h"
 
-enum FuncType:uint8_t{
+enum FuncType:bool{
 	SPAWN = 0,
 	SYNC = 1,
-	END = 2
 };
 
 struct FibArgs{
@@ -23,13 +22,13 @@ struct FibArgs{
 
 template<> 
 void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncType>::spawn(int left, Worker<FibArgs, FuncType>::Task* address, int slot, int addressOwner, bool lastProducer){
-		count++;
+		//count++;
 		if(left >= 2){
 			//createFibChildrenAndLaunch(slot, address, left);
 			auto syncTaskId = createNewSyncFrameCustom(slot, address, left - 2);
 			createNewSpawnFrameAndWriteArgsAndLaunch(left - 1, syncTaskId, 0);
 		}
-		else{
+		else {
   		    _mm_prefetch(&address->args, _MM_HINT_T0);		    		    		    		    
 		    __builtin_prefetch(&address->remainingInputs, 1, 3);
 		    if(addressOwner == workerId)
@@ -42,22 +41,29 @@ void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncTyp
 
 template<> 
 void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncType>::sync(int left, Worker<FibArgs, FuncType>::Task* address, int right, int slot, int addressOwner){
-		count++;
+		//count++;
 		int sum = left + right;		
-   		if(addressOwner == workerId){
-			writeDataToFrameImpl(address, slot, sum, true, false);
-                }else{
-		   	workers[addressOwner]->writeDataToFrameImpl(address, slot, sum, false, false);
-		}
-   		return;
+		if(address){
+	   		if(addressOwner == workerId){
+				writeDataToFrameImpl(address, slot, sum, true, false);
+	                }else{
+			   	workers[addressOwner]->writeDataToFrameImpl(address, slot, sum, false, false);
+			}
+	   		return;
+   		}else{
+   			int sum = left + right;
+   			std::cout<<"sum:"<<sum<<"\n";
+   			exited.store(true, std::memory_order_release);
+   		}
 }
 
 template<> 
-void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncType>::exitTask(int left, int right){
+void __attribute__((cold)) __attribute__((preserve_none)) Worker<FibArgs, FuncType>::exitTask(int left, int right){
+		//count++;
 		int sum = left + right;
    		std::cout<<"sum:"<<sum<<"\n";
-   		exited[workerId].store(true, std::memory_order_relaxed);
-   		std::atomic_thread_fence(std::memory_order_release);		
+   		exited.store(true, std::memory_order_release);
+   		//std::atomic_thread_fence(std::memory_order_release);		
 }
 
 template class Runtime<FibArgs, Worker<FibArgs, FuncType> >;
@@ -86,6 +92,10 @@ void Runtime<FibArgs, Worker<FibArgs, FuncType>>::run(){
     	w->start();
     for (auto w : workers) 
     	w->join();
+    int total = 0;
+    for(auto w:workers)
+    	total+=w->count;
+    std::cout<<"total:"<<total<<"\n";
 }
 
 
