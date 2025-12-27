@@ -8,9 +8,10 @@
 #include <iostream>
 #include "runtime.h"
 
-enum FuncType:bool{
+enum FuncType:uint8_t{
 	SPAWN = 0,
 	SYNC = 1,
+	EXIT
 };
 
 struct FibArgs{
@@ -21,7 +22,7 @@ struct FibArgs{
 };
 
 template<> 
-void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncType>::spawn(int left, Worker<FibArgs, FuncType>::Task* address, int slot, int addressOwner, bool lastProducer){
+void __attribute__((hot)) __attribute__((preserve_none)) __attribute__((always_inline)) Worker<FibArgs, FuncType>::spawn(int left, Worker<FibArgs, FuncType>::Task* address, int slot, bool lastProducer){
 		//count++;
 		if(left >= 2){
 			//createFibChildrenAndLaunch(slot, address, left);
@@ -31,38 +32,27 @@ void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncTyp
 		else {
   		    _mm_prefetch(&address->args, _MM_HINT_T0);		    		    		    		    
 		    __builtin_prefetch(&address->remainingInputs, 1, 3);
-		    if(addressOwner == workerId)
-		    	writeDataToFrameImpl(address, slot, left, true, lastProducer);
-		    else
-		        workers[addressOwner]->writeDataToFrameImpl(address, slot, left, false, false);
+		    writeDataToFrameImpl(address, slot, left, lastProducer);
 		}
 		return;
 }
 
 template<> 
-void __attribute__((hot)) __attribute__((preserve_none)) Worker<FibArgs, FuncType>::sync(int left, Worker<FibArgs, FuncType>::Task* address, int right, int slot, int addressOwner){
+void __attribute__((hot)) __attribute__((preserve_none)) __attribute__((always_inline))  Worker<FibArgs, FuncType>::sync(int left, Worker<FibArgs, FuncType>::Task* address, int right, int slot){
 		//count++;
 		int sum = left + right;		
-		if(address){
-	   		if(addressOwner == workerId){
-				writeDataToFrameImpl(address, slot, sum, true, false);
-	                }else{
-			   	workers[addressOwner]->writeDataToFrameImpl(address, slot, sum, false, false);
-			}
-	   		return;
-   		}else{
-   			int sum = left + right;
-   			std::cout<<"sum:"<<sum<<"\n";
-   			exited.store(true, std::memory_order_release);
-   		}
+		writeSyncDataToFrameImpl(address, slot, sum);
+	   	return;
 }
 
 template<> 
-void __attribute__((cold)) __attribute__((preserve_none)) Worker<FibArgs, FuncType>::exitTask(int left, int right){
+void __attribute__((cold)) __attribute__((preserve_none)) __attribute__((always_inline)) Worker<FibArgs, FuncType>::exitTask(int left, int right){
 		//count++;
 		int sum = left + right;
    		std::cout<<"sum:"<<sum<<"\n";
-   		exited.store(true, std::memory_order_release);
+   		for(int i = 0;i<workers.size(); i++){
+	   		exited_per_worker[i].store(true, std::memory_order_relaxed);
+	   	}
    		//std::atomic_thread_fence(std::memory_order_release);		
 }
 
@@ -82,7 +72,7 @@ Runtime<FibArgs, Worker<FibArgs, FuncType>>::Runtime(int numThreads){
 
 template<>
 void Runtime<FibArgs, Worker<FibArgs,FuncType>>::init(){
-    ((Worker<FibArgs, FuncType>*)workers[0])->createNewSpawnFrameAndWriteArgs(40, 0);
+    ((Worker<FibArgs, FuncType>*)workers[0])->createNewSpawnFrameAndWriteArgs(42, 0);
 }
 
 template<>

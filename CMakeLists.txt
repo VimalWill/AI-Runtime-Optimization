@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_COMPILER clang++-20)
 
 # Generate assembly + keep normal build products
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -fvectorize -march=native -flto -O3 -march=native -mtune=native -fno-exceptions -fno-rtti")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -fvectorize -march=native -flto -O3 -march=native -mtune=native -fno-exceptions -fno-rtti -fopenmp-simd")
 
 include_directories(include)
 
