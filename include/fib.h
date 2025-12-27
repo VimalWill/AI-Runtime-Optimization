@@ -95,7 +95,16 @@ void Runtime<FibArgs, Worker<FibArgs, FuncType>>::run(){
     int total = 0;
     for(auto w:workers)
     	total+=w->count;
-    std::cout<<"total:"<<total<<"\n";
+    int totalsteals = 0;
+    for(auto w:workers)
+    	totalsteals += w->numsteals;
+   int totaltransitivesteals = 0;
+    for(auto w:workers)
+    	totaltransitivesteals += w->numtransitivesteals;
+   int totalSquashes = 0;
+    for(auto w:workers)
+    	totalSquashes += w->lastProducerSquash;    	
+    std::cout<<"total:"<<total<<", steals:"<<totalsteals<<", totaltransitivesteals:"<<totaltransitivesteals<<", total sqaushes:"<<totalSquashes<<"\n";
 }
 
 
